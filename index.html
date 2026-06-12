@@ -347,6 +347,20 @@ body{
   padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;font-family:var(--display);
 }
 
+.settings-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;}
+.settings-item{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  background:var(--bg-elev2);border:1px solid var(--border);border-radius:8px;
+  padding:8px 12px;font-size:13px;
+}
+.settings-item .si-main{font-family:var(--mono);font-size:13px;}
+.settings-item .si-sub{color:var(--muted);font-size:11px;font-family:var(--mono);margin-left:6px;}
+.settings-item button{
+  background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;
+}
+.settings-item button:hover{color:var(--danger);}
+.settings-empty{color:var(--muted);font-size:13px;font-family:var(--mono);padding:6px 0;}
+
 /* Toast */
 #toast{
   position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
@@ -435,6 +449,7 @@ body{
     </div>
 
     <div class="sidebar-footer">
+      <button class="side-btn" id="btn-settings">⚙ Settings</button>
       <button class="side-btn primary" id="btn-export">⬇ Export data (.txt)</button>
       <button class="side-btn" id="btn-import">⬆ Import data (.txt)</button>
       <input type="file" id="import-file" accept=".txt,.json" style="display:none;">
@@ -480,7 +495,8 @@ body{
       <div class="form-grid">
         <div class="form-row">
           <label>Network / Chain</label>
-          <input type="text" id="f-network" placeholder="e.g. Ethereum, Solana, Arbitrum">
+          <input type="text" id="f-network" list="dl-networks" placeholder="select or type a network">
+          <datalist id="dl-networks"></datalist>
         </div>
         <div class="form-row">
           <label>Status</label>
@@ -491,8 +507,9 @@ body{
         </div>
       </div>
       <div class="form-row">
-        <label>Wallet (name / address)</label>
-        <input type="text" id="f-wallet" placeholder="e.g. MetaMask Main — 0xAbc...123">
+        <label>Wallet</label>
+        <input type="text" id="f-wallet" list="dl-wallets" placeholder="select a saved wallet alias or type a new one">
+        <datalist id="dl-wallets"></datalist>
       </div>
       <div class="form-grid">
         <div class="form-row">
@@ -570,11 +587,45 @@ body{
 
 <div id="toast"></div>
 
+<!-- ============ SETTINGS MODAL ============ -->
+<div class="modal-backdrop" id="settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Settings</h3>
+      <button class="modal-close" data-close="settings-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Networks</label>
+        <div class="add-log-row" style="margin-bottom:10px;">
+          <input type="text" id="set-network-input" placeholder="e.g. Ethereum, Solana, Arbitrum">
+          <button id="set-network-add">Add</button>
+        </div>
+        <div class="settings-list" id="set-network-list"></div>
+      </div>
+      <div class="form-row">
+        <label>Wallets</label>
+        <div class="add-log-row" style="margin-bottom:10px; flex-wrap:wrap;">
+          <input type="text" id="set-wallet-alias" placeholder="Alias (e.g. MetaMask Main)" style="flex:1 1 140px;">
+          <input type="text" id="set-wallet-address" placeholder="Address (optional)" style="flex:2 1 200px;">
+          <button id="set-wallet-add">Add</button>
+        </div>
+        <div class="settings-list" id="set-wallet-list"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn primary" data-close="settings-modal">Done</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const STORAGE_KEY = 'stakeledger_projects_v1';
+const SETTINGS_KEY = 'stakeledger_settings_v1';
 const GATE_KEY = 'stakeledger_disclaimer_ok';
 
 let projects = [];
+let settings = { networks: [], wallets: [] }; // wallets: [{alias, address}]
 let activeFilters = { type:'all', status:'all', network:'all', wallet:'all', search:'' };
 let currentDetailId = null;
 let editingId = null;
@@ -588,6 +639,17 @@ function loadProjects(){
 }
 function saveProjects(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+}
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    settings = raw ? JSON.parse(raw) : { networks: [], wallets: [] };
+    if(!Array.isArray(settings.networks)) settings.networks = [];
+    if(!Array.isArray(settings.wallets)) settings.wallets = [];
+  }catch(e){ settings = { networks: [], wallets: [] }; }
+}
+function saveSettings(){
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 function uid(){ return 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
 
@@ -618,6 +680,7 @@ if(sessionStorage.getItem(GATE_KEY) === '1'){
 // ---------- Init ----------
 function init(){
   loadProjects();
+  loadSettings();
   renderAll();
   bindEvents();
 }
@@ -701,6 +764,13 @@ function bindEvents(){
   document.getElementById('btn-import').addEventListener('click', ()=> document.getElementById('import-file').click());
   document.getElementById('import-file').addEventListener('change', importData);
   document.getElementById('btn-clear').addEventListener('click', clearAllData);
+
+  // Settings
+  document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
+  document.getElementById('set-network-add').addEventListener('click', addSettingNetwork);
+  document.getElementById('set-network-input').addEventListener('keydown', e=>{ if(e.key==='Enter') addSettingNetwork(); });
+  document.getElementById('set-wallet-add').addEventListener('click', addSettingWallet);
+  document.getElementById('set-wallet-address').addEventListener('keydown', e=>{ if(e.key==='Enter') addSettingWallet(); });
 }
 
 function setRadioGroup(containerId, val){
@@ -744,11 +814,102 @@ function applyChipActiveStates(){
   });
 }
 
+// ---------- Settings modal ----------
+function openSettingsModal(){
+  renderSettingsLists();
+  openModal('settings-modal');
+}
+
+function renderSettingsLists(){
+  const netList = document.getElementById('set-network-list');
+  if(settings.networks.length === 0){
+    netList.innerHTML = '<div class="settings-empty">No networks added yet.</div>';
+  }else{
+    netList.innerHTML = settings.networks.map((n,i)=>`
+      <div class="settings-item">
+        <span class="si-main">${escapeHtml(n)}</span>
+        <button data-del-network="${i}">✕</button>
+      </div>`).join('');
+    netList.querySelectorAll('[data-del-network]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        settings.networks.splice(+btn.dataset.delNetwork, 1);
+        saveSettings();
+        renderSettingsLists();
+        rebuildDynamicFilters();
+        populateDatalists();
+      });
+    });
+  }
+
+  const walletList = document.getElementById('set-wallet-list');
+  if(settings.wallets.length === 0){
+    walletList.innerHTML = '<div class="settings-empty">No wallets added yet.</div>';
+  }else{
+    walletList.innerHTML = settings.wallets.map((w,i)=>`
+      <div class="settings-item">
+        <span><span class="si-main">${escapeHtml(w.alias)}</span>${w.address ? `<span class="si-sub">${escapeHtml(truncate(w.address,24))}</span>`:''}</span>
+        <button data-del-wallet="${i}">✕</button>
+      </div>`).join('');
+    walletList.querySelectorAll('[data-del-wallet]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        settings.wallets.splice(+btn.dataset.delWallet, 1);
+        saveSettings();
+        renderSettingsLists();
+        rebuildDynamicFilters();
+        populateDatalists();
+      });
+    });
+  }
+}
+
+function addSettingNetwork(){
+  const input = document.getElementById('set-network-input');
+  const val = input.value.trim();
+  if(!val) return;
+  if(!settings.networks.some(n=>n.toLowerCase()===val.toLowerCase())){
+    settings.networks.push(val);
+    saveSettings();
+  }
+  input.value='';
+  renderSettingsLists();
+  rebuildDynamicFilters();
+  populateDatalists();
+}
+
+function addSettingWallet(){
+  const aliasInput = document.getElementById('set-wallet-alias');
+  const addrInput = document.getElementById('set-wallet-address');
+  const alias = aliasInput.value.trim();
+  const address = addrInput.value.trim();
+  if(!alias) return;
+  if(!settings.wallets.some(w=>w.alias.toLowerCase()===alias.toLowerCase())){
+    settings.wallets.push({ alias, address });
+    saveSettings();
+  }
+  aliasInput.value=''; addrInput.value='';
+  renderSettingsLists();
+  rebuildDynamicFilters();
+  populateDatalists();
+}
+
+// Populate the <datalist> options for the add/edit project form
+function populateDatalists(){
+  document.getElementById('dl-networks').innerHTML =
+    settings.networks.map(n=>`<option value="${escapeAttr(n)}"></option>`).join('');
+
+  document.getElementById('dl-wallets').innerHTML =
+    settings.wallets.map(w=>{
+      const display = w.address ? `${w.alias} — ${w.address}` : w.alias;
+      return `<option value="${escapeAttr(display)}">${escapeAttr(w.alias)}</option>`;
+    }).join('');
+}
+
 // ---------- Render ----------
 function renderAll(){
   rebuildDynamicFilters();
   renderStats();
   renderGrid();
+  populateDatalists();
 }
 
 function renderStats(){
@@ -980,7 +1141,8 @@ function exportData(){
     exportedAt: new Date().toISOString(),
     app: 'stake-ledger',
     version: 1,
-    projects
+    projects,
+    settings
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'text/plain'});
   const url = URL.createObjectURL(blob);
@@ -1000,6 +1162,7 @@ function importData(e){
     try{
       const data = JSON.parse(evt.target.result);
       const incoming = Array.isArray(data) ? data : data.projects;
+      const incomingSettings = Array.isArray(data) ? null : data.settings;
       if(!Array.isArray(incoming)) throw new Error('Invalid file format');
 
       const mode = confirm('Click OK to MERGE with existing data, or Cancel to REPLACE all current data with this file.');
@@ -1011,12 +1174,25 @@ function importData(e){
           if(!p.log) p.log = [];
           projects.push(p);
         });
+        if(incomingSettings){
+          (incomingSettings.networks||[]).forEach(n=>{
+            if(!settings.networks.some(x=>x.toLowerCase()===n.toLowerCase())) settings.networks.push(n);
+          });
+          (incomingSettings.wallets||[]).forEach(w=>{
+            if(!settings.wallets.some(x=>x.alias.toLowerCase()===w.alias.toLowerCase())) settings.wallets.push(w);
+          });
+        }
         toast(`Merged ${incoming.length} project(s)`);
       }else{
         projects = incoming.map(p=>({ ...p, id: p.id || uid(), log: p.log || [] }));
+        settings = incomingSettings ? {
+          networks: Array.isArray(incomingSettings.networks) ? incomingSettings.networks : [],
+          wallets: Array.isArray(incomingSettings.wallets) ? incomingSettings.wallets : []
+        } : { networks: [], wallets: [] };
         toast(`Replaced data with ${incoming.length} project(s)`);
       }
       saveProjects();
+      saveSettings();
       renderAll();
     }catch(err){
       toast('Could not read file — invalid format', true);
@@ -1027,10 +1203,12 @@ function importData(e){
 }
 
 function clearAllData(){
-  if(confirm('This will permanently delete ALL projects and logs stored in this browser. Export a backup first if needed. Continue?')){
+  if(confirm('This will permanently delete ALL projects, logs, and saved settings (networks/wallets) stored in this browser. Export a backup first if needed. Continue?')){
     if(confirm('Are you absolutely sure? This cannot be undone.')){
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(SETTINGS_KEY);
       projects = [];
+      settings = { networks: [], wallets: [] };
       renderAll();
       toast('All data removed');
     }
