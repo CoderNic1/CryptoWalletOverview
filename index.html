@@ -508,7 +508,7 @@ body{
       </div>
       <div class="form-row">
         <label>Wallet</label>
-        <input type="text" id="f-wallet" list="dl-wallets" placeholder="select a saved wallet alias or type a new one">
+        <input type="text" id="f-wallet" list="dl-wallets" placeholder="select a saved wallet alias, or type an address/name">
         <datalist id="dl-wallets"></datalist>
       </div>
       <div class="form-grid">
@@ -899,9 +899,18 @@ function populateDatalists(){
 
   document.getElementById('dl-wallets').innerHTML =
     settings.wallets.map(w=>{
-      const display = w.address ? `${w.alias} — ${w.address}` : w.alias;
-      return `<option value="${escapeAttr(display)}">${escapeAttr(w.alias)}</option>`;
+      const label = w.address ? `${w.alias} — ${truncate(w.address,20)}` : w.alias;
+      return `<option value="${escapeAttr(w.alias)}" label="${escapeAttr(label)}"></option>`;
     }).join('');
+}
+
+// Given whatever the user typed/picked in the wallet field, resolve it to the
+// address if it matches a saved alias exactly, otherwise return as-is.
+function resolveWalletValue(val){
+  val = val.trim();
+  const match = settings.wallets.find(w=>w.alias.toLowerCase()===val.toLowerCase());
+  if(match) return match.address ? match.address : match.alias;
+  return val;
 }
 
 // ---------- Render ----------
@@ -1016,7 +1025,7 @@ function saveProjectForm(){
     type: getRadioValue('f-type') || 'token',
     status: getRadioValue('f-status') || 'active',
     network: document.getElementById('f-network').value.trim(),
-    wallet: document.getElementById('f-wallet').value.trim(),
+    wallet: resolveWalletValue(document.getElementById('f-wallet').value.trim()),
     asset: document.getElementById('f-asset').value.trim(),
     platform: document.getElementById('f-platform').value.trim(),
     discord: document.getElementById('f-discord').value.trim(),
