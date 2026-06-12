@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stake Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0D1117;
+  --bg-elev:#161B22;
+  --bg-elev2:#1C2330;
+  --border:#21262D;
+  --text:#E6EDF3;
+  --muted:#7C8B9D;
+  --accent:#3FB950;
+  --accent-dim:#1F4D2C;
+  --warn:#F0883E;
+  --warn-dim:#4D331C;
+  --note:#58A6FF;
+  --note-dim:#1C3A5E;
+  --danger:#F85149;
+  --radius:10px;
+  --mono:'IBM Plex Mono', monospace;
+  --display:'Space Grotesk', sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--display);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+/* ============ DISCLAIMER GATE ============ */
+#gate{
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  z-index:1000;padding:20px;
+}
+.gate-card{
+  background:var(--bg-elev);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  max-width:560px;width:100%;
+  padding:36px;
+  position:relative;
+  overflow:hidden;
+}
+.gate-card::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:4px;
+  background:linear-gradient(90deg,var(--accent),var(--note),var(--warn));
+}
+.gate-eyebrow{
+  font-family:var(--mono);
+  font-size:12px;color:var(--muted);
+  letter-spacing:0.12em;text-transform:uppercase;
+  margin-bottom:8px;
+}
+.gate-card h1{
+  font-size:26px;margin:0 0 16px 0;font-weight:700;
+}
+.gate-card ul{
+  font-size:14px;line-height:1.7;color:var(--text);
+  padding-left:20px;margin:0 0 20px 0;
+}
+.gate-card li{margin-bottom:8px;}
+.gate-card li b{color:var(--accent);}
+.gate-checkbox-row{
+  display:flex;align-items:flex-start;gap:10px;
+  background:var(--bg-elev2);
+  border:1px solid var(--border);
+  border-radius:8px;padding:14px;margin-bottom:18px;
+  font-size:13px;color:var(--muted);
+}
+.gate-checkbox-row input{
+  margin-top:2px;width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;
+}
+#enter-btn{
+  width:100%;padding:14px;border:none;border-radius:8px;
+  background:var(--accent);color:#0D1117;font-weight:600;font-size:15px;
+  font-family:var(--display);cursor:pointer;
+  transition:opacity .15s, transform .1s;
+  opacity:0.4;pointer-events:none;
+}
+#enter-btn.active{opacity:1;pointer-events:auto;}
+#enter-btn.active:hover{transform:translateY(-1px);}
+
+/* ============ APP SHELL ============ */
+#app{display:none;}
+#app.show{display:flex;min-height:100vh;}
+
+/* Sidebar */
+.sidebar{
+  width:280px;flex-shrink:0;
+  background:var(--bg-elev);
+  border-right:1px solid var(--border);
+  padding:24px 20px;
+  display:flex;flex-direction:column;gap:24px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+.brand{display:flex;flex-direction:column;gap:2px;}
+.brand-mark{
+  font-size:20px;font-weight:700;letter-spacing:-0.01em;
+  display:flex;align-items:center;gap:8px;
+}
+.brand-mark .dot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-dim);
+}
+.brand-sub{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.08em;}
+
+.filter-group{display:flex;flex-direction:column;gap:10px;}
+.filter-label{
+  font-family:var(--mono);font-size:11px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:0.1em;
+}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{
+  font-family:var(--mono);font-size:12px;
+  border:1px solid var(--border);
+  background:var(--bg-elev2);
+  color:var(--muted);
+  padding:6px 10px;border-radius:6px;
+  cursor:pointer;transition:all .12s;
+  user-select:none;
+}
+.chip:hover{border-color:var(--muted);color:var(--text);}
+.chip.active{
+  background:var(--accent-dim);
+  border-color:var(--accent);
+  color:var(--accent);
+}
+.chip.active.type-nft{background:var(--note-dim);border-color:var(--note);color:var(--note);}
+
+#search-input{
+  width:100%;padding:10px 12px;
+  background:var(--bg-elev2);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;
+}
+#search-input:focus{outline:none;border-color:var(--accent);}
+
+.sidebar-footer{margin-top:auto;display:flex;flex-direction:column;gap:8px;}
+.side-btn{
+  font-family:var(--display);font-size:13px;font-weight:500;
+  padding:10px 12px;border-radius:8px;border:1px solid var(--border);
+  background:var(--bg-elev2);color:var(--text);cursor:pointer;
+  display:flex;align-items:center;gap:8px;justify-content:center;
+  transition:border-color .12s;
+}
+.side-btn:hover{border-color:var(--muted);}
+.side-btn.danger{color:var(--danger);}
+.side-btn.danger:hover{border-color:var(--danger);}
+.side-btn.primary{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+
+/* Main */
+.main{flex:1;padding:28px 32px;max-width:1200px;}
+.main-header{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  margin-bottom:24px;flex-wrap:wrap;gap:16px;
+}
+.main-header h2{margin:0;font-size:24px;font-weight:700;}
+.main-header .sub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px;}
+.add-btn{
+  background:var(--accent);color:#0D1117;border:none;
+  padding:11px 20px;border-radius:8px;font-weight:600;font-size:14px;
+  font-family:var(--display);cursor:pointer;display:flex;align-items:center;gap:8px;
+  transition:transform .1s;
+}
+.add-btn:hover{transform:translateY(-1px);}
+
+.stats-row{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;}
+.stat-card{
+  background:var(--bg-elev);border:1px solid var(--border);
+  border-radius:var(--radius);padding:14px 18px;min-width:120px;flex:1;
+}
+.stat-card .num{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--accent);}
+.stat-card .lbl{font-size:12px;color:var(--muted);margin-top:4px;}
+
+/* Cards grid */
+.grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:16px;
+}
+.project-card{
+  background:var(--bg-elev);border:1px solid var(--border);
+  border-radius:var(--radius);padding:18px;
+  cursor:pointer;transition:border-color .15s, transform .1s;
+  position:relative;overflow:hidden;
+}
+.project-card:hover{border-color:var(--muted);transform:translateY(-2px);}
+.project-card .strip{
+  position:absolute;top:0;left:0;width:4px;height:100%;
+}
+.strip.staking-token{background:var(--accent);}
+.strip.staking-nft{background:var(--note);}
+.strip.staking-both{background:linear-gradient(180deg,var(--accent),var(--note));}
+.strip.staking-unstaked{background:var(--muted);}
+
+.pc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+.pc-title{font-size:17px;font-weight:700;margin:0;}
+.pc-network{
+  font-family:var(--mono);font-size:11px;color:var(--muted);
+  background:var(--bg-elev2);border:1px solid var(--border);
+  border-radius:5px;padding:3px 8px;white-space:nowrap;
+}
+.pc-meta{font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.6;}
+.pc-meta div{margin-bottom:3px;}
+.pc-meta b{color:var(--text);font-weight:500;}
+.pc-tags{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;}
+.pc-tag{
+  font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:5px;
+  background:var(--bg-elev2);border:1px solid var(--border);color:var(--muted);
+}
+.pc-tag.type-token{color:var(--accent);border-color:var(--accent-dim);}
+.pc-tag.type-nft{color:var(--note);border-color:var(--note-dim);}
+.pc-status{
+  display:inline-block;font-family:var(--mono);font-size:11px;
+  padding:3px 8px;border-radius:5px;margin-top:10px;
+}
+.pc-status.active{background:var(--accent-dim);color:var(--accent);}
+.pc-status.unstaked{background:var(--bg-elev2);color:var(--muted);}
+
+.empty-state{
+  text-align:center;padding:60px 20px;color:var(--muted);
+  border:1px dashed var(--border);border-radius:var(--radius);
+}
+.empty-state h3{color:var(--text);margin-bottom:8px;}
+.empty-state p{font-size:14px;}
+
+/* ============ MODAL ============ */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,0.6);
+  display:none;align-items:center;justify-content:center;
+  z-index:500;padding:20px;backdrop-filter:blur(2px);
+}
+.modal-backdrop.show{display:flex;}
+.modal{
+  background:var(--bg-elev);border:1px solid var(--border);
+  border-radius:var(--radius);max-width:640px;width:100%;
+  max-height:90vh;overflow-y:auto;
+}
+.modal-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:20px 24px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--bg-elev);
+}
+.modal-header h3{margin:0;font-size:18px;}
+.modal-close{
+  background:none;border:none;color:var(--muted);font-size:20px;
+  cursor:pointer;line-height:1;padding:4px;
+}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:24px;}
+.form-row{margin-bottom:16px;}
+.form-row label{
+  display:block;font-family:var(--mono);font-size:11px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;
+}
+.form-row input, .form-row select, .form-row textarea{
+  width:100%;padding:10px 12px;background:var(--bg-elev2);
+  border:1px solid var(--border);border-radius:8px;color:var(--text);
+  font-family:var(--display);font-size:14px;
+}
+.form-row input:focus, .form-row select:focus, .form-row textarea:focus{
+  outline:none;border-color:var(--accent);
+}
+.form-row textarea{resize:vertical;min-height:70px;font-family:var(--mono);font-size:13px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;}
+.radio-group{display:flex;gap:8px;}
+.radio-opt{
+  flex:1;padding:10px;text-align:center;border:1px solid var(--border);
+  border-radius:8px;cursor:pointer;font-family:var(--mono);font-size:13px;
+  color:var(--muted);background:var(--bg-elev2);transition:all .12s;
+}
+.radio-opt.sel{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+.modal-footer{
+  padding:16px 24px;border-top:1px solid var(--border);
+  display:flex;justify-content:flex-end;gap:10px;
+}
+.btn{
+  padding:10px 18px;border-radius:8px;border:1px solid var(--border);
+  background:var(--bg-elev2);color:var(--text);font-family:var(--display);
+  font-weight:500;font-size:14px;cursor:pointer;
+}
+.btn.primary{background:var(--accent);color:#0D1117;border:none;font-weight:600;}
+.btn.danger{color:var(--danger);}
+.btn:hover{transform:translateY(-1px);}
+
+/* Detail view */
+.detail-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);padding:0 24px;}
+.detail-tab{
+  padding:10px 14px;font-family:var(--mono);font-size:12px;color:var(--muted);
+  cursor:pointer;border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:0.06em;
+}
+.detail-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.detail-section{padding:20px 24px;}
+.detail-section.hidden{display:none;}
+.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.detail-row:last-child{border-bottom:none;}
+.detail-row .k{color:var(--muted);font-family:var(--mono);font-size:12px;}
+.detail-row .v{font-family:var(--mono);text-align:right;word-break:break-all;max-width:60%;}
+.detail-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+.detail-links a{
+  font-family:var(--mono);font-size:12px;color:var(--note);text-decoration:none;
+  border:1px solid var(--note-dim);padding:5px 10px;border-radius:6px;
+}
+.detail-links a:hover{background:var(--note-dim);}
+.notes-box{
+  background:var(--bg-elev2);border:1px solid var(--border);border-radius:8px;
+  padding:12px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-top:8px;
+}
+
+/* Log */
+.log-list{display:flex;flex-direction:column;gap:8px;}
+.log-item{
+  background:var(--bg-elev2);border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;
+}
+.log-item .log-main{flex:1;}
+.log-tag{
+  font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;
+  padding:2px 7px;border-radius:4px;margin-right:8px;
+}
+.log-tag.stake{background:var(--accent-dim);color:var(--accent);}
+.log-tag.unstake{background:var(--warn-dim);color:var(--warn);}
+.log-tag.note{background:var(--note-dim);color:var(--note);}
+.log-tag.claim{background:#3D2E5C;color:#B392F0;}
+.log-date{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;}
+.log-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 4px;}
+.log-del:hover{color:var(--danger);}
+.add-log-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.add-log-row select{
+  background:var(--bg-elev2);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 10px;
+}
+.add-log-row input{
+  flex:1;min-width:150px;background:var(--bg-elev2);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-family:var(--display);font-size:13px;padding:8px 12px;
+}
+.add-log-row button{
+  background:var(--accent);color:#0D1117;border:none;border-radius:8px;
+  padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;font-family:var(--display);
+}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--bg-elev2);border:1px solid var(--accent);color:var(--accent);
+  padding:12px 22px;border-radius:8px;font-family:var(--mono);font-size:13px;
+  opacity:0;transition:all .25s;z-index:600;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* Mobile */
+@media (max-width: 860px){
+  #app.show{flex-direction:column;}
+  .sidebar{width:100%;height:auto;position:relative;}
+  .main{padding:20px;}
+  .form-grid{grid-template-columns:1fr;}
+  .detail-row .v{max-width:100%;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ DISCLAIMER GATE ============ -->
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-eyebrow">// Before you begin</div>
+    <h1>Stake Ledger — read this first</h1>
+    <ul>
+      <li><b>100% local & offline.</b> Every entry you create is stored only in this browser's localStorage. Nothing is sent anywhere, ever.</li>
+      <li><b>Not financial advice.</b> This tool is a personal note-taking and organizing app for your own records. It does not give recommendations.</li>
+      <li><b>No accountability.</b> The creator(s) of this tool are not responsible for lost data, lost funds, decisions made, or any damages resulting from use of this app.</li>
+      <li><b>Your responsibility.</b> Clearing your browser data, using a different device or browser, or private/incognito mode will remove or hide your saved data. Use Export regularly to back up.</li>
+      <li><b>Never enter private keys or seed phrases.</b> This app is for tracking public info only (wallet addresses, project names, links, notes).</li>
+    </ul>
+    <label class="gate-checkbox-row">
+      <input type="checkbox" id="gate-check">
+      <span>I understand and agree — data stays on my device, this is not financial advice, and I'm responsible for my own backups and decisions.</span>
+    </label>
+    <button id="enter-btn">Enter Stake Ledger</button>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><span class="dot"></span>Stake Ledger</div>
+      <div class="brand-sub">LOCAL PORTFOLIO TRACKER</div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Search</div>
+      <input type="text" id="search-input" placeholder="project, wallet, founder...">
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Asset type</div>
+      <div class="chip-row" id="filter-type">
+        <div class="chip" data-filter-type="all">All</div>
+        <div class="chip" data-filter-type="token">Token</div>
+        <div class="chip" data-filter-type="nft">NFT</div>
+        <div class="chip" data-filter-type="both">Both</div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Status</div>
+      <div class="chip-row" id="filter-status">
+        <div class="chip" data-filter-status="all">All</div>
+        <div class="chip" data-filter-status="active">Active</div>
+        <div class="chip" data-filter-status="unstaked">Unstaked</div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Network</div>
+      <div class="chip-row" id="filter-network">
+        <div class="chip" data-filter-network="all">All</div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-label">Wallet</div>
+      <div class="chip-row" id="filter-wallet">
+        <div class="chip" data-filter-wallet="all">All</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="side-btn primary" id="btn-export">⬇ Export data (.txt)</button>
+      <button class="side-btn" id="btn-import">⬆ Import data (.txt)</button>
+      <input type="file" id="import-file" accept=".txt,.json" style="display:none;">
+      <button class="side-btn danger" id="btn-clear">🗑 Remove all data</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="main-header">
+      <div>
+        <h2>Your staking overview</h2>
+        <div class="sub" id="result-count">0 projects</div>
+      </div>
+      <button class="add-btn" id="btn-add">+ Add project</button>
+    </div>
+
+    <div class="stats-row" id="stats-row"></div>
+
+    <div class="grid" id="project-grid"></div>
+  </main>
+</div>
+
+<!-- ============ ADD/EDIT MODAL ============ -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="edit-modal-title">Add project</h3>
+      <button class="modal-close" data-close="edit-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Project name *</label>
+        <input type="text" id="f-name" placeholder="e.g. Pudgy Penguins, Lido, EigenLayer...">
+      </div>
+      <div class="form-row">
+        <label>Staking type</label>
+        <div class="radio-group" id="f-type">
+          <div class="radio-opt" data-val="token">Token</div>
+          <div class="radio-opt" data-val="nft">NFT</div>
+          <div class="radio-opt" data-val="both">Both</div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Network / Chain</label>
+          <input type="text" id="f-network" placeholder="e.g. Ethereum, Solana, Arbitrum">
+        </div>
+        <div class="form-row">
+          <label>Status</label>
+          <div class="radio-group" id="f-status">
+            <div class="radio-opt" data-val="active">Active</div>
+            <div class="radio-opt" data-val="unstaked">Unstaked</div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Wallet (name / address)</label>
+        <input type="text" id="f-wallet" placeholder="e.g. MetaMask Main — 0xAbc...123">
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Asset / token staked</label>
+          <input type="text" id="f-asset" placeholder="e.g. 500 $LDO, or 'Penguin #1023'">
+        </div>
+        <div class="form-row">
+          <label>Platform / staking dApp</label>
+          <input type="text" id="f-platform" placeholder="e.g. app.lido.fi">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Discord</label>
+          <input type="text" id="f-discord" placeholder="invite link or handle">
+        </div>
+        <div class="form-row">
+          <label>X / Twitter</label>
+          <input type="text" id="f-x" placeholder="@handle or link">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Website</label>
+          <input type="text" id="f-website" placeholder="https://...">
+        </div>
+        <div class="form-row">
+          <label>Founders / team</label>
+          <input type="text" id="f-founders" placeholder="names or handles">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Notes</label>
+        <textarea id="f-notes" placeholder="Anything important: lockup periods, risks, vibes, reminders..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-close="edit-modal">Cancel</button>
+      <button class="btn primary" id="btn-save">Save project</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DETAIL MODAL ============ -->
+<div class="modal-backdrop" id="detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="detail-title">Project</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="detail-edit-btn">Edit</button>
+        <button class="btn danger" id="detail-delete-btn">Delete</button>
+        <button class="modal-close" data-close="detail-modal">✕</button>
+      </div>
+    </div>
+    <div class="detail-tabs">
+      <div class="detail-tab active" data-tab="info">Info</div>
+      <div class="detail-tab" data-tab="log">Activity log</div>
+    </div>
+    <div class="detail-section" id="tab-info"></div>
+    <div class="detail-section hidden" id="tab-log">
+      <div class="add-log-row">
+        <select id="log-type">
+          <option value="stake">Stake</option>
+          <option value="unstake">Unstake</option>
+          <option value="claim">Claim / reward</option>
+          <option value="note">Note</option>
+        </select>
+        <input type="text" id="log-text" placeholder="What happened?">
+        <button id="log-add-btn">Add</button>
+      </div>
+      <div class="log-list" id="log-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'stakeledger_projects_v1';
+const GATE_KEY = 'stakeledger_disclaimer_ok';
+
+let projects = [];
+let activeFilters = { type:'all', status:'all', network:'all', wallet:'all', search:'' };
+let currentDetailId = null;
+let editingId = null;
+
+// ---------- Storage ----------
+function loadProjects(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    projects = raw ? JSON.parse(raw) : [];
+  }catch(e){ projects = []; }
+}
+function saveProjects(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+}
+function uid(){ return 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
+
+// ---------- Gate ----------
+const gate = document.getElementById('gate');
+const app = document.getElementById('app');
+const gateCheck = document.getElementById('gate-check');
+const enterBtn = document.getElementById('enter-btn');
+
+gateCheck.addEventListener('change', ()=>{
+  enterBtn.classList.toggle('active', gateCheck.checked);
+});
+enterBtn.addEventListener('click', ()=>{
+  if(!gateCheck.checked) return;
+  sessionStorage.setItem(GATE_KEY, '1');
+  gate.style.display = 'none';
+  app.classList.add('show');
+  init();
+});
+
+// Re-show gate every session (do not persist across browser restarts) — but skip if already accepted this session
+if(sessionStorage.getItem(GATE_KEY) === '1'){
+  gate.style.display = 'none';
+  app.classList.add('show');
+  init();
+}
+
+// ---------- Init ----------
+function init(){
+  loadProjects();
+  renderAll();
+  bindEvents();
+}
+
+function bindEvents(){
+  document.getElementById('search-input').addEventListener('input', e=>{
+    activeFilters.search = e.target.value.toLowerCase();
+    renderGrid();
+  });
+
+  document.getElementById('filter-type').addEventListener('click', e=>{
+    const t = e.target.closest('.chip'); if(!t) return;
+    activeFilters.type = t.dataset.filterType;
+    renderGrid();
+  });
+  document.getElementById('filter-status').addEventListener('click', e=>{
+    const t = e.target.closest('.chip'); if(!t) return;
+    activeFilters.status = t.dataset.filterStatus;
+    renderGrid();
+  });
+  document.getElementById('filter-network').addEventListener('click', e=>{
+    const t = e.target.closest('.chip'); if(!t) return;
+    activeFilters.network = t.dataset.filterNetwork;
+    renderGrid();
+  });
+  document.getElementById('filter-wallet').addEventListener('click', e=>{
+    const t = e.target.closest('.chip'); if(!t) return;
+    activeFilters.wallet = t.dataset.filterWallet;
+    renderGrid();
+  });
+
+  // Add / edit modal
+  document.getElementById('btn-add').addEventListener('click', ()=> openEditModal());
+  document.getElementById('btn-save').addEventListener('click', saveProjectForm);
+  document.getElementById('f-type').addEventListener('click', e=>{
+    const t = e.target.closest('.radio-opt'); if(!t) return;
+    setRadioGroup('f-type', t.dataset.val);
+  });
+  document.getElementById('f-status').addEventListener('click', e=>{
+    const t = e.target.closest('.radio-opt'); if(!t) return;
+    setRadioGroup('f-status', t.dataset.val);
+  });
+
+  // Detail modal
+  document.getElementById('detail-edit-btn').addEventListener('click', ()=>{
+    closeModal('detail-modal');
+    openEditModal(currentDetailId);
+  });
+  document.getElementById('detail-delete-btn').addEventListener('click', ()=>{
+    if(confirm('Delete this project and all its logs? This cannot be undone.')){
+      projects = projects.filter(p=>p.id !== currentDetailId);
+      saveProjects();
+      closeModal('detail-modal');
+      renderAll();
+      toast('Project deleted');
+    }
+  });
+  document.querySelectorAll('.detail-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.detail-tab').forEach(x=>x.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-info').classList.toggle('hidden', tab.dataset.tab!=='info');
+      document.getElementById('tab-log').classList.toggle('hidden', tab.dataset.tab!=='log');
+    });
+  });
+  document.getElementById('log-add-btn').addEventListener('click', addLogEntry);
+  document.getElementById('log-text').addEventListener('keydown', e=>{
+    if(e.key==='Enter') addLogEntry();
+  });
+
+  // Modal close
+  document.querySelectorAll('[data-close]').forEach(btn=>{
+    btn.addEventListener('click', ()=> closeModal(btn.dataset.close));
+  });
+  document.querySelectorAll('.modal-backdrop').forEach(bd=>{
+    bd.addEventListener('click', e=>{ if(e.target === bd) closeModal(bd.id); });
+  });
+
+  // Export / import / clear
+  document.getElementById('btn-export').addEventListener('click', exportData);
+  document.getElementById('btn-import').addEventListener('click', ()=> document.getElementById('import-file').click());
+  document.getElementById('import-file').addEventListener('change', importData);
+  document.getElementById('btn-clear').addEventListener('click', clearAllData);
+}
+
+function setRadioGroup(containerId, val){
+  document.querySelectorAll(`#${containerId} .radio-opt`).forEach(o=>{
+    o.classList.toggle('sel', o.dataset.val === val);
+  });
+}
+function getRadioValue(containerId){
+  const sel = document.querySelector(`#${containerId} .radio-opt.sel`);
+  return sel ? sel.dataset.val : null;
+}
+
+// ---------- Filter chip rendering (network/wallet are dynamic) ----------
+function rebuildDynamicFilters(){
+  const networks = [...new Set(projects.map(p=>p.network).filter(Boolean))].sort();
+  const wallets = [...new Set(projects.map(p=>p.wallet).filter(Boolean))].sort();
+
+  const netContainer = document.getElementById('filter-network');
+  netContainer.innerHTML = '<div class="chip" data-filter-network="all">All</div>' +
+    networks.map(n=>`<div class="chip" data-filter-network="${escapeAttr(n)}">${escapeHtml(n)}</div>`).join('');
+
+  const walletContainer = document.getElementById('filter-wallet');
+  walletContainer.innerHTML = '<div class="chip" data-filter-wallet="all">All</div>' +
+    wallets.map(w=>`<div class="chip" data-filter-wallet="${escapeAttr(w)}">${escapeHtml(truncate(w,18))}</div>`).join('');
+
+  // if active filter value no longer exists, reset
+  if(activeFilters.network !== 'all' && !networks.includes(activeFilters.network)) activeFilters.network='all';
+  if(activeFilters.wallet !== 'all' && !wallets.includes(activeFilters.wallet)) activeFilters.wallet='all';
+
+  applyChipActiveStates();
+}
+
+function applyChipActiveStates(){
+  document.querySelectorAll('#filter-type .chip').forEach(c=>c.classList.toggle('active', c.dataset.filterType===activeFilters.type));
+  document.querySelectorAll('#filter-status .chip').forEach(c=>c.classList.toggle('active', c.dataset.filterStatus===activeFilters.status));
+  document.querySelectorAll('#filter-network .chip').forEach(c=>c.classList.toggle('active', c.dataset.filterNetwork===activeFilters.network));
+  document.querySelectorAll('#filter-wallet .chip').forEach(c=>c.classList.toggle('active', c.dataset.filterWallet===activeFilters.wallet));
+  // also fix type chip styling for nft/both
+  document.querySelectorAll('#filter-type .chip').forEach(c=>{
+    c.classList.toggle('type-nft', (c.dataset.filterType==='nft'||c.dataset.filterType==='both') && c.classList.contains('active'));
+  });
+}
+
+// ---------- Render ----------
+function renderAll(){
+  rebuildDynamicFilters();
+  renderStats();
+  renderGrid();
+}
+
+function renderStats(){
+  const total = projects.length;
+  const active = projects.filter(p=>p.status==='active').length;
+  const nftCount = projects.filter(p=>p.type==='nft'||p.type==='both').length;
+  const tokenCount = projects.filter(p=>p.type==='token'||p.type==='both').length;
+  const networks = new Set(projects.map(p=>p.network).filter(Boolean)).size;
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card"><div class="num">${total}</div><div class="lbl">Total projects</div></div>
+    <div class="stat-card"><div class="num">${active}</div><div class="lbl">Active stakes</div></div>
+    <div class="stat-card"><div class="num">${tokenCount}</div><div class="lbl">Token staking</div></div>
+    <div class="stat-card"><div class="num">${nftCount}</div><div class="lbl">NFT staking</div></div>
+    <div class="stat-card"><div class="num">${networks}</div><div class="lbl">Networks used</div></div>
+  `;
+}
+
+function filteredProjects(){
+  return projects.filter(p=>{
+    if(activeFilters.type !== 'all' && p.type !== activeFilters.type) return false;
+    if(activeFilters.status !== 'all' && p.status !== activeFilters.status) return false;
+    if(activeFilters.network !== 'all' && p.network !== activeFilters.network) return false;
+    if(activeFilters.wallet !== 'all' && p.wallet !== activeFilters.wallet) return false;
+    if(activeFilters.search){
+      const hay = [p.name,p.network,p.wallet,p.asset,p.platform,p.discord,p.x,p.website,p.founders,p.notes].join(' ').toLowerCase();
+      if(!hay.includes(activeFilters.search)) return false;
+    }
+    return true;
+  });
+}
+
+function renderGrid(){
+  applyChipActiveStates();
+  const list = filteredProjects();
+  document.getElementById('result-count').textContent = `${list.length} project${list.length===1?'':'s'}`;
+  const grid = document.getElementById('project-grid');
+
+  if(list.length === 0){
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <h3>${projects.length===0 ? 'No projects yet' : 'Nothing matches those filters'}</h3>
+      <p>${projects.length===0 ? 'Add your first staking project to start your overview.' : 'Try adjusting your filters or search.'}</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(p=>{
+    const stripClass = p.status==='unstaked' ? 'staking-unstaked' : `staking-${p.type}`;
+    return `
+    <div class="project-card" data-id="${p.id}">
+      <div class="strip ${stripClass}"></div>
+      <div class="pc-top">
+        <h3 class="pc-title">${escapeHtml(p.name)}</h3>
+        ${p.network ? `<span class="pc-network">${escapeHtml(p.network)}</span>` : ''}
+      </div>
+      <div class="pc-meta">
+        ${p.wallet ? `<div><b>Wallet:</b> ${escapeHtml(truncate(p.wallet,28))}</div>` : ''}
+        ${p.asset ? `<div><b>Asset:</b> ${escapeHtml(truncate(p.asset,32))}</div>` : ''}
+        ${p.platform ? `<div><b>Platform:</b> ${escapeHtml(p.platform)}</div>` : ''}
+      </div>
+      <div class="pc-tags">
+        <span class="pc-tag type-${p.type}">${p.type.toUpperCase()}</span>
+        ${(p.log&&p.log.length) ? `<span class="pc-tag">${p.log.length} log entr${p.log.length===1?'y':'ies'}</span>`:''}
+      </div>
+      <span class="pc-status ${p.status==='active'?'active':'unstaked'}">${p.status==='active'?'● Active':'○ Unstaked'}</span>
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.project-card').forEach(card=>{
+    card.addEventListener('click', ()=> openDetailModal(card.dataset.id));
+  });
+}
+
+// ---------- Edit modal ----------
+function openEditModal(id){
+  editingId = id || null;
+  const p = id ? projects.find(x=>x.id===id) : null;
+
+  document.getElementById('edit-modal-title').textContent = p ? 'Edit project' : 'Add project';
+  document.getElementById('f-name').value = p?.name || '';
+  document.getElementById('f-network').value = p?.network || '';
+  document.getElementById('f-wallet').value = p?.wallet || '';
+  document.getElementById('f-asset').value = p?.asset || '';
+  document.getElementById('f-platform').value = p?.platform || '';
+  document.getElementById('f-discord').value = p?.discord || '';
+  document.getElementById('f-x').value = p?.x || '';
+  document.getElementById('f-website').value = p?.website || '';
+  document.getElementById('f-founders').value = p?.founders || '';
+  document.getElementById('f-notes').value = p?.notes || '';
+
+  setRadioGroup('f-type', p?.type || 'token');
+  setRadioGroup('f-status', p?.status || 'active');
+
+  openModal('edit-modal');
+  setTimeout(()=>document.getElementById('f-name').focus(), 50);
+}
+
+function saveProjectForm(){
+  const name = document.getElementById('f-name').value.trim();
+  if(!name){ toast('Project name is required', true); return; }
+
+  const data = {
+    name,
+    type: getRadioValue('f-type') || 'token',
+    status: getRadioValue('f-status') || 'active',
+    network: document.getElementById('f-network').value.trim(),
+    wallet: document.getElementById('f-wallet').value.trim(),
+    asset: document.getElementById('f-asset').value.trim(),
+    platform: document.getElementById('f-platform').value.trim(),
+    discord: document.getElementById('f-discord').value.trim(),
+    x: document.getElementById('f-x').value.trim(),
+    website: document.getElementById('f-website').value.trim(),
+    founders: document.getElementById('f-founders').value.trim(),
+    notes: document.getElementById('f-notes').value.trim(),
+  };
+
+  if(editingId){
+    const p = projects.find(x=>x.id===editingId);
+    Object.assign(p, data);
+    toast('Project updated');
+  }else{
+    data.id = uid();
+    data.log = [];
+    data.createdAt = new Date().toISOString();
+    projects.unshift(data);
+    toast('Project added');
+  }
+  saveProjects();
+  closeModal('edit-modal');
+  renderAll();
+}
+
+// ---------- Detail modal ----------
+function openDetailModal(id){
+  currentDetailId = id;
+  const p = projects.find(x=>x.id===id);
+  if(!p) return;
+
+  document.getElementById('detail-title').textContent = p.name;
+
+  // reset to info tab
+  document.querySelectorAll('.detail-tab').forEach(x=>x.classList.remove('active'));
+  document.querySelector('.detail-tab[data-tab="info"]').classList.add('active');
+  document.getElementById('tab-info').classList.remove('hidden');
+  document.getElementById('tab-log').classList.add('hidden');
+
+  const rows = [
+    ['Type', p.type.toUpperCase()],
+    ['Status', p.status === 'active' ? '● Active' : '○ Unstaked'],
+    ['Network', p.network],
+    ['Wallet', p.wallet],
+    ['Asset / token', p.asset],
+    ['Platform', p.platform],
+    ['Founders / team', p.founders],
+  ].filter(([,v])=>v);
+
+  let html = rows.map(([k,v])=>`<div class="detail-row"><div class="k">${k}</div><div class="v">${escapeHtml(v)}</div></div>`).join('');
+
+  const links = [];
+  if(p.discord) links.push(`<a href="${linkify(p.discord)}" target="_blank" rel="noopener">Discord ↗</a>`);
+  if(p.x) links.push(`<a href="${linkify(p.x, 'x')}" target="_blank" rel="noopener">X / Twitter ↗</a>`);
+  if(p.website) links.push(`<a href="${linkify(p.website)}" target="_blank" rel="noopener">Website ↗</a>`);
+
+  if(links.length) html += `<div class="detail-links">${links.join('')}</div>`;
+  if(p.notes) html += `<div class="notes-box">${escapeHtml(p.notes)}</div>`;
+
+  document.getElementById('tab-info').innerHTML = html || '<p style="color:var(--muted)">No details added yet.</p>';
+
+  renderLog();
+  openModal('detail-modal');
+}
+
+function renderLog(){
+  const p = projects.find(x=>x.id===currentDetailId);
+  const list = document.getElementById('log-list');
+  if(!p.log || p.log.length===0){
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px">No activity logged yet.</p>';
+    return;
+  }
+  list.innerHTML = p.log.slice().reverse().map(entry=>`
+    <div class="log-item" data-log-id="${entry.id}">
+      <div class="log-main">
+        <span class="log-tag ${entry.type}">${entry.type}</span>
+        <span class="log-date">${formatDate(entry.date)}</span><br>
+        <span>${escapeHtml(entry.text)}</span>
+      </div>
+      <button class="log-del" data-del-log="${entry.id}">✕</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('[data-del-log]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = projects.find(x=>x.id===currentDetailId);
+      p.log = p.log.filter(e=>e.id !== btn.dataset.delLog);
+      saveProjects();
+      renderLog();
+      renderGrid();
+    });
+  });
+}
+
+function addLogEntry(){
+  const text = document.getElementById('log-text').value.trim();
+  if(!text) return;
+  const type = document.getElementById('log-type').value;
+  const p = projects.find(x=>x.id===currentDetailId);
+  if(!p.log) p.log = [];
+  p.log.push({ id:'l_'+Date.now()+'_'+Math.random().toString(36).slice(2,6), type, text, date:new Date().toISOString() });
+
+  // auto-update status on stake/unstake
+  if(type==='stake') p.status='active';
+  if(type==='unstake') p.status='unstaked';
+
+  saveProjects();
+  document.getElementById('log-text').value='';
+  renderLog();
+  renderAll();
+  openDetailModal(currentDetailId); // refresh info tab too, keep log tab open
+  document.querySelector('.detail-tab[data-tab="log"]').click();
+}
+
+// ---------- Modal helpers ----------
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+
+// ---------- Export / Import ----------
+function exportData(){
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    app: 'stake-ledger',
+    version: 1,
+    projects
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `stake-ledger-export-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Exported to .txt file');
+}
+
+function importData(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt=>{
+    try{
+      const data = JSON.parse(evt.target.result);
+      const incoming = Array.isArray(data) ? data : data.projects;
+      if(!Array.isArray(incoming)) throw new Error('Invalid file format');
+
+      const mode = confirm('Click OK to MERGE with existing data, or Cancel to REPLACE all current data with this file.');
+      if(mode){
+        // merge: avoid duplicate ids
+        const existingIds = new Set(projects.map(p=>p.id));
+        incoming.forEach(p=>{
+          if(!p.id || existingIds.has(p.id)) p.id = uid();
+          if(!p.log) p.log = [];
+          projects.push(p);
+        });
+        toast(`Merged ${incoming.length} project(s)`);
+      }else{
+        projects = incoming.map(p=>({ ...p, id: p.id || uid(), log: p.log || [] }));
+        toast(`Replaced data with ${incoming.length} project(s)`);
+      }
+      saveProjects();
+      renderAll();
+    }catch(err){
+      toast('Could not read file — invalid format', true);
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function clearAllData(){
+  if(confirm('This will permanently delete ALL projects and logs stored in this browser. Export a backup first if needed. Continue?')){
+    if(confirm('Are you absolutely sure? This cannot be undone.')){
+      localStorage.removeItem(STORAGE_KEY);
+      projects = [];
+      renderAll();
+      toast('All data removed');
+    }
+  }
+}
+
+// ---------- Utils ----------
+function escapeHtml(str){
+  if(str===undefined||str===null) return '';
+  return String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(str){ return escapeHtml(str).replace(/"/g,'&quot;'); }
+function truncate(str, n){ return str.length > n ? str.slice(0,n)+'…' : str; }
+function formatDate(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
+function linkify(val, kind){
+  val = val.trim();
+  if(val.startsWith('http')) return val;
+  if(kind==='x') return `https://x.com/${val.replace(/^@/,'')}`;
+  if(val.startsWith('discord.gg') || val.includes('discord')) return `https://${val.replace(/^https?:\/\//,'')}`;
+  return `https://${val.replace(/^@/,'')}`;
+}
+function toast(msg, isError){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = isError ? 'var(--danger)' : 'var(--accent)';
+  t.style.color = isError ? 'var(--danger)' : 'var(--accent)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+</script>
+</body>
+</html>
