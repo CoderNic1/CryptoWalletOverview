@@ -277,6 +277,7 @@ body{
   display:block;font-family:var(--mono);font-size:11px;color:var(--muted);
   text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;
 }
+.label-optional{text-transform:none;letter-spacing:normal;color:var(--muted);font-size:11px;}
 .form-row input, .form-row select, .form-row textarea{
   width:100%;padding:10px 12px;background:var(--bg-elev2);
   border:1px solid var(--border);border-radius:8px;color:var(--text);
@@ -389,6 +390,24 @@ body{
 }
 .storage-bar-fill.warn{background:var(--warn);}
 .storage-bar-fill.danger{background:var(--danger);}
+
+.toggle-row{
+  display:flex;align-items:flex-start;gap:10px;cursor:pointer;
+  font-family:var(--display);font-size:13px;color:var(--text);
+  font-weight:400;text-transform:none;letter-spacing:normal;
+}
+.toggle-row input{width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;margin-top:1px;}
+
+.pc-unstake{
+  font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:5px;
+  margin-top:8px;display:inline-block;margin-left:6px;
+}
+.pc-unstake.locked{background:var(--warn-dim);color:var(--warn);}
+.pc-unstake.unlocked{background:var(--accent-dim);color:var(--accent);}
+.pc-unstake.anytime{background:var(--bg-elev2);color:var(--muted);}
+
+.platform-link{color:var(--note);text-decoration:none;}
+.platform-link:hover{text-decoration:underline;}
 
 /* Toast */
 #toast{
@@ -559,6 +578,10 @@ body{
           <input type="text" id="f-platform" placeholder="e.g. app.lido.fi">
         </div>
       </div>
+      <div class="form-row">
+        <label>Unstaking available from <span class="label-optional">(optional — leave empty if unstakable anytime)</span></label>
+        <input type="date" id="f-unstake-date">
+      </div>
       <div class="form-grid">
         <div class="form-row">
           <label>Discord</label>
@@ -635,6 +658,13 @@ body{
     </div>
     <div class="modal-body">
       <div class="form-row">
+        <label>General</label>
+        <label class="toggle-row">
+          <input type="checkbox" id="set-clickable-platform">
+          <span>Make the "Platform / staking dApp" field a clickable link that opens in a new tab</span>
+        </label>
+      </div>
+      <div class="form-row">
         <label>Networks</label>
         <div class="add-log-row" style="margin-bottom:10px;">
           <input type="text" id="set-network-input" placeholder="e.g. Ethereum, Solana, Arbitrum">
@@ -690,7 +720,8 @@ function loadSettings(){
     settings = raw ? JSON.parse(raw) : { networks: [], wallets: [] };
     if(!Array.isArray(settings.networks)) settings.networks = [];
     if(!Array.isArray(settings.wallets)) settings.wallets = [];
-  }catch(e){ settings = { networks: [], wallets: [] }; }
+    if(typeof settings.clickablePlatform !== 'boolean') settings.clickablePlatform = false;
+  }catch(e){ settings = { networks: [], wallets: [], clickablePlatform: false }; }
 }
 function saveSettings(){
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -842,6 +873,11 @@ function bindEvents(){
 
   // Settings
   document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
+  document.getElementById('set-clickable-platform').addEventListener('change', e=>{
+    settings.clickablePlatform = e.target.checked;
+    saveSettings();
+    renderGrid();
+  });
   document.getElementById('set-network-add').addEventListener('click', addSettingNetwork);
   document.getElementById('set-network-input').addEventListener('keydown', e=>{ if(e.key==='Enter') addSettingNetwork(); });
   document.getElementById('set-wallet-add').addEventListener('click', addSettingWallet);
@@ -893,6 +929,7 @@ function applyChipActiveStates(){
 function openSettingsModal(){
   renderSettingsLists();
   renderStorageUsage();
+  document.getElementById('set-clickable-platform').checked = settings.clickablePlatform;
   openModal('settings-modal');
 }
 
@@ -973,7 +1010,7 @@ function renderStorageUsage(){
   const projBytes = (localStorage.getItem(STORAGE_KEY) || '').length;
   const setBytes = (localStorage.getItem(SETTINGS_KEY) || '').length;
   const totalKB = (projBytes + setBytes) / 1024;
-  const quotaKB = 5 * 1024; // ~5MB typical quota
+  const quotaKB = 5 * 1024; // ~5MB typical per-origin localStorage quota
   const pct = Math.min(100, (totalKB / quotaKB) * 100);
 
   let cls = '';
@@ -981,9 +1018,10 @@ function renderStorageUsage(){
   else if(pct > 50) cls = 'warn';
 
   document.getElementById('storage-usage').innerHTML = `
-    ${totalKB < 1 ? '<1' : totalKB.toFixed(1)} KB used of ~${quotaKB/1024} MB available (${pct.toFixed(2)}%)
+    This app uses ${totalKB < 1 ? '<1' : totalKB.toFixed(1)} KB of the ~${quotaKB/1024} MB localStorage quota available to this site (${pct.toFixed(2)}%)
     <div class="storage-bar"><div class="storage-bar-fill ${cls}" style="width:${pct}%"></div></div>
     ${projects.length} project${projects.length===1?'':'s'} · ${settings.networks.length} network${settings.networks.length===1?'':'s'} · ${settings.wallets.length} wallet${settings.wallets.length===1?'':'s'} saved
+    <div style="margin-top:6px;font-size:11px;color:var(--muted)">Note: this is storage for this site only — figures shown by other websites or browser settings include their own data plus other storage types (cookies, caches, IndexedDB), so totals won't match.</div>
   `;
 }
 
@@ -1051,6 +1089,32 @@ function lastActivityDate(p){
   return p.log.reduce((latest, e)=> !latest || e.date > latest ? e.date : latest, null);
 }
 
+// Returns { cls, label } describing the unstake lock status for a project
+function unstakeInfo(p){
+  if(!p.unstakeDate){
+    return { cls:'anytime', label:'Unstakable anytime' };
+  }
+  const target = new Date(p.unstakeDate + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  const diffDays = Math.round((target - now) / (1000*60*60*24));
+
+  if(diffDays <= 0){
+    return { cls:'unlocked', label:'Unstakable now' };
+  }
+  if(diffDays === 1){
+    return { cls:'locked', label:'Unstakes in 1 day' };
+  }
+  if(diffDays < 30){
+    return { cls:'locked', label:`Unstakes in ${diffDays} days` };
+  }
+  const months = Math.floor(diffDays/30);
+  const remDays = diffDays % 30;
+  let label = `Unstakes in ${months} month${months===1?'':'s'}`;
+  if(remDays > 0) label += ` ${remDays}d`;
+  return { cls:'locked', label };
+}
+
 function sortProjects(list){
   const sorted = list.slice();
   switch(sortMode){
@@ -1101,6 +1165,10 @@ function renderGrid(){
   grid.innerHTML = list.map(p=>{
     const stripClass = p.status==='unstaked' ? 'staking-unstaked' : `staking-${p.type}`;
     const last = lastActivityDate(p);
+    const unstake = unstakeInfo(p);
+    const platformHtml = (p.platform && settings.clickablePlatform)
+      ? `<a class="platform-link" href="${linkify(p.platform)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(p.platform)} ↗</a>`
+      : escapeHtml(p.platform || '');
     return `
     <div class="project-card" data-id="${p.id}">
       <div class="strip ${stripClass}"></div>
@@ -1112,13 +1180,14 @@ function renderGrid(){
       <div class="pc-meta">
         ${p.wallet ? `<div><b>Wallet:</b> ${escapeHtml(truncate(p.wallet,28))}</div>` : ''}
         ${p.asset ? `<div><b>Asset:</b> ${escapeHtml(truncate(p.asset,32))}</div>` : ''}
-        ${p.platform ? `<div><b>Platform:</b> ${escapeHtml(p.platform)}</div>` : ''}
+        ${p.platform ? `<div><b>Platform:</b> ${platformHtml}</div>` : ''}
       </div>
       <div class="pc-tags">
         <span class="pc-tag type-${p.type}">${p.type.toUpperCase()}</span>
         ${(p.log&&p.log.length) ? `<span class="pc-tag">${p.log.length} log entr${p.log.length===1?'y':'ies'}</span>`:''}
       </div>
       <span class="pc-status ${p.status==='active'?'active':'unstaked'}">${p.status==='active'?'● Active':'○ Unstaked'}</span>
+      ${p.status==='active' ? `<span class="pc-unstake ${unstake.cls}">${unstake.label}</span>` : ''}
       ${last ? `<div class="pc-last-activity">Last activity: ${formatDate(last)}</div>` : ''}
     </div>`;
   }).join('');
@@ -1151,6 +1220,7 @@ function openEditModal(id){
   document.getElementById('f-wallet').value = p?.wallet || '';
   document.getElementById('f-asset').value = p?.asset || '';
   document.getElementById('f-platform').value = p?.platform || '';
+  document.getElementById('f-unstake-date').value = p?.unstakeDate || '';
   document.getElementById('f-discord').value = p?.discord || '';
   document.getElementById('f-x').value = p?.x || '';
   document.getElementById('f-website').value = p?.website || '';
@@ -1176,6 +1246,7 @@ function saveProjectForm(){
     wallet: resolveWalletValue(document.getElementById('f-wallet').value.trim()),
     asset: document.getElementById('f-asset').value.trim(),
     platform: document.getElementById('f-platform').value.trim(),
+    unstakeDate: document.getElementById('f-unstake-date').value,
     discord: document.getElementById('f-discord').value.trim(),
     x: document.getElementById('f-x').value.trim(),
     website: document.getElementById('f-website').value.trim(),
@@ -1214,17 +1285,29 @@ function openDetailModal(id){
   document.getElementById('tab-info').classList.remove('hidden');
   document.getElementById('tab-log').classList.add('hidden');
 
+  const unstake = unstakeInfo(p);
+
   const rows = [
     ['Type', p.type.toUpperCase()],
     ['Status', p.status === 'active' ? '● Active' : '○ Unstaked'],
     ['Network', p.network],
     ['Wallet', p.wallet],
     ['Asset / token', p.asset],
-    ['Platform', p.platform],
     ['Founders / team', p.founders],
   ].filter(([,v])=>v);
 
   let html = rows.map(([k,v])=>`<div class="detail-row"><div class="k">${k}</div><div class="v">${escapeHtml(v)}</div></div>`).join('');
+
+  if(p.platform){
+    const platformVal = settings.clickablePlatform
+      ? `<a class="platform-link" href="${linkify(p.platform)}" target="_blank" rel="noopener">${escapeHtml(p.platform)} ↗</a>`
+      : escapeHtml(p.platform);
+    html += `<div class="detail-row"><div class="k">Platform</div><div class="v">${platformVal}</div></div>`;
+  }
+
+  if(p.status === 'active'){
+    html += `<div class="detail-row"><div class="k">Unstaking</div><div class="v"><span class="pc-unstake ${unstake.cls}">${unstake.label}</span>${p.unstakeDate ? ` (${formatDateOnly(p.unstakeDate)})` : ''}</div></div>`;
+  }
 
   const links = [];
   if(p.discord) links.push(`<a href="${linkify(p.discord)}" target="_blank" rel="noopener">Discord ↗</a>`);
@@ -1383,6 +1466,10 @@ function truncate(str, n){ return str.length > n ? str.slice(0,n)+'…' : str; }
 function formatDate(iso){
   const d = new Date(iso);
   return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
+function formatDateOnly(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
 }
 function linkify(val, kind){
   val = val.trim();
